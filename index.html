@@ -1,0 +1,325 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0b1c30" />
+  <title>Quant Edge AI</title>
+  <meta name="description" content="LSTM, ARIMA, Transformer 기반 주식 분석 및 스캐너" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="./assets/styles.css" />
+  <script src="https://cdn.plot.ly/plotly-2.35.2.min.js" defer></script>
+  <script src="./assets/app.js" defer></script>
+</head>
+<body>
+  <div id="appShell" class="app-shell">
+    <aside id="sidebar" class="sidebar" aria-label="주요 메뉴">
+      <div class="brand-row">
+        <div class="brand-mark">Q</div>
+        <div>
+          <div class="brand-name">Quant Edge</div>
+          <div class="brand-subtitle">Institutional AI</div>
+        </div>
+        <button id="closeSidebarBtn" class="icon-button sidebar-close" aria-label="설정 탭 닫기">×</button>
+      </div>
+
+      <nav class="nav-list">
+        <button class="nav-item active" data-view="dashboard">
+          <span class="nav-icon">▦</span><span>대시보드</span>
+        </button>
+        <button class="nav-item" data-view="analysis">
+          <span class="nav-icon">⌁</span><span>종목 분석</span>
+        </button>
+        <button class="nav-item" data-view="scanner">
+          <span class="nav-icon">◎</span><span>주식 스캐너</span>
+        </button>
+      </nav>
+
+      <div class="sidebar-section">
+        <div class="section-kicker">예측 설정</div>
+        <label class="field-label" for="modelSelect">모델</label>
+        <select id="modelSelect" class="field-control">
+          <option value="ensemble">3모델 앙상블</option>
+          <option value="lstm">LSTM</option>
+          <option value="arima">ARIMA</option>
+          <option value="transformer">Transformer</option>
+        </select>
+
+        <label class="field-label" for="sequenceLength">입력 시계열 길이</label>
+        <select id="sequenceLength" class="field-control">
+          <option>40</option><option selected>60</option><option>90</option><option>120</option>
+        </select>
+
+        <label class="field-label" for="horizon">예측 기간</label>
+        <select id="horizon" class="field-control">
+          <option value="3">3봉</option><option value="5" selected>5봉</option><option value="10">10봉</option>
+        </select>
+
+        <label class="field-label" for="sampleCount">학습 표본 수</label>
+        <input id="sampleCount" class="field-control" type="number" min="120" max="900" step="20" value="320" />
+      </div>
+
+      <div class="sidebar-section">
+        <div class="section-kicker">매수 기준</div>
+        <label class="field-label" for="minProbability">최소 상승확률 <span id="minProbabilityValue">52%</span></label>
+        <input id="minProbability" type="range" min="50" max="90" value="52" />
+        <label class="field-label" for="minScore">최소 종합점수 <span id="minScoreValue">50%</span></label>
+        <input id="minScore" type="range" min="30" max="95" value="50" />
+      </div>
+
+      <div class="sidebar-footer">
+        <div class="market-status"><span class="status-dot"></span>시장 데이터 연결</div>
+        <button id="resetBtn" class="secondary-button full-width">설정 초기화</button>
+      </div>
+    </aside>
+
+    <button id="openSidebarBtn" class="sidebar-open-button" aria-label="설정 탭 열기">☰ 설정</button>
+    <div id="sidebarBackdrop" class="sidebar-backdrop"></div>
+
+    <main class="main-content">
+      <header class="topbar">
+        <div class="search-wrap">
+          <span class="search-icon">⌕</span>
+          <input id="globalSearch" type="search" placeholder="종목명 또는 티커 검색" autocomplete="off" />
+          <div id="searchResults" class="search-results" hidden></div>
+        </div>
+        <div class="topbar-actions">
+          <span id="currentTime" class="topbar-time"></span>
+          <button id="refreshBtn" class="icon-button" aria-label="데이터 새로고침">↻</button>
+        </div>
+      </header>
+
+      <div class="page-wrap">
+        <section id="dashboardView" class="view active">
+          <div class="page-heading-row">
+            <div>
+              <p class="eyebrow">MARKET INTELLIGENCE</p>
+              <h1>주식 예측 대시보드</h1>
+              <p class="page-description">시장 흐름, 모델 신호, 관심 종목을 한 화면에서 확인합니다.</p>
+            </div>
+            <div class="heading-actions">
+              <span class="status-chip positive">미국장 데이터</span>
+              <span class="status-chip neutral">일봉 기준</span>
+            </div>
+          </div>
+
+          <div class="metric-grid three">
+            <article class="metric-card">
+              <div class="metric-label">분석 종목</div>
+              <div class="metric-value" id="dashboardSymbol">AAPL</div>
+              <div class="metric-foot">Apple Inc.</div>
+            </article>
+            <article class="metric-card accent-green">
+              <div class="metric-label">현재 신호</div>
+              <div class="metric-value positive" id="dashboardSignal">관망</div>
+              <div class="metric-foot" id="dashboardConfidence">상승확률 50.0%</div>
+            </article>
+            <article class="metric-card">
+              <div class="metric-label">예상 수익률</div>
+              <div class="metric-value" id="dashboardExpected">0.00%</div>
+              <div class="metric-foot" id="dashboardModel">3모델 앙상블</div>
+            </article>
+          </div>
+
+          <div class="dashboard-grid">
+            <article class="card chart-card dashboard-chart-card">
+              <div class="card-header">
+                <div>
+                  <h2>시장 가격 흐름</h2>
+                  <p id="dashboardChartSubtitle">AAPL · 최근 1년</p>
+                </div>
+                <div class="segmented-control" role="group" aria-label="차트 기간">
+                  <button data-range="3mo">3M</button>
+                  <button data-range="6mo">6M</button>
+                  <button class="active" data-range="1y">1Y</button>
+                  <button data-range="2y">2Y</button>
+                </div>
+              </div>
+              <div id="dashboardChart" class="plot chart-lg"></div>
+            </article>
+
+            <article class="card picks-card">
+              <div class="card-header compact">
+                <div>
+                  <h2>AI 관심 종목</h2>
+                  <p>최근 기술 흐름 기반</p>
+                </div>
+                <span class="status-chip positive">실시간</span>
+              </div>
+              <div id="topPicks" class="pick-list"></div>
+            </article>
+          </div>
+
+          <article class="card scanner-preview-card">
+            <div class="card-header">
+              <div>
+                <h2>주식 스캐너 요약</h2>
+                <p>여러 종목을 같은 기준으로 비교해 우선순위를 보여줍니다.</p>
+              </div>
+              <button class="text-button" data-jump="scanner">전체 스캔 열기 →</button>
+            </div>
+            <div id="dashboardScannerTable" class="table-wrap"></div>
+          </article>
+        </section>
+
+        <section id="analysisView" class="view">
+          <div class="page-heading-row">
+            <div>
+              <p class="eyebrow">STOCK ANALYSIS</p>
+              <h1>종목 분석</h1>
+              <p class="page-description">가격 흐름과 세 모델의 예측을 함께 확인합니다.</p>
+            </div>
+          </div>
+
+          <article class="card analysis-toolbar">
+            <div class="toolbar-grid">
+              <div>
+                <label class="field-label" for="symbolSelect">주식 선택</label>
+                <select id="symbolSelect" class="field-control"></select>
+              </div>
+              <div>
+                <label class="field-label" for="intervalSelect">차트 주기</label>
+                <select id="intervalSelect" class="field-control">
+                  <option value="1d" selected>일봉</option>
+                  <option value="1h">1시간봉</option>
+                  <option value="30m">30분봉</option>
+                </select>
+              </div>
+              <div class="toolbar-buttons">
+                <button id="quickPredictBtn" class="primary-button">빠른 예측 실행</button>
+                <button id="backtestBtn" class="secondary-button">정밀 백테스트 실행</button>
+              </div>
+            </div>
+            <div id="analysisProgress" class="progress-panel" hidden>
+              <div class="progress-line"><span id="analysisProgressLabel">준비 중</span><strong id="analysisProgressPercent">0%</strong></div>
+              <div class="progress-track"><div id="analysisProgressBar" class="progress-bar"></div></div>
+            </div>
+          </article>
+
+          <article class="stock-hero card">
+            <div>
+              <div class="stock-name-row"><h2 id="stockName">Apple Inc.</h2><span id="stockTicker">AAPL</span></div>
+              <div class="stock-price-row"><strong id="stockPrice">$0.00</strong><span id="stockChange">0.00%</span></div>
+            </div>
+            <div class="stock-hero-meta">
+              <span id="stockIntervalLabel">일봉</span>
+              <span id="stockModelLabel">3모델 앙상블 · 5봉 예측</span>
+            </div>
+          </article>
+
+          <div class="analysis-layout">
+            <article class="card chart-card">
+              <div class="card-header">
+                <div>
+                  <h2>가격 차트 및 예측</h2>
+                  <p>손가락 제스처·마우스 휠 확대/축소 지원</p>
+                </div>
+                <div class="chart-legend">
+                  <span><i class="legend-dot up"></i>상승</span>
+                  <span><i class="legend-dot down"></i>하락</span>
+                  <span><i class="legend-line ma20"></i>MA20</span>
+                  <span><i class="legend-line ma60"></i>MA60</span>
+                </div>
+              </div>
+              <div id="priceChart" class="plot chart-xl"></div>
+            </article>
+
+            <div class="side-stack">
+              <article class="card prediction-card">
+                <div class="card-header compact"><h2>예측 결과</h2><span id="predictionGrade" class="status-chip neutral">대기</span></div>
+                <div class="prediction-main">
+                  <div class="score-ring" id="probabilityRing"><span id="probabilityValue">0%</span></div>
+                  <div>
+                    <div class="prediction-label">상승 확률</div>
+                    <div id="predictionSignal" class="prediction-signal">분석 전</div>
+                    <div id="predictionSummary" class="prediction-summary">예측 실행 후 결과가 표시됩니다.</div>
+                  </div>
+                </div>
+                <div class="mini-metrics">
+                  <div><span>예상 수익률</span><strong id="expectedReturn">0.00%</strong></div>
+                  <div><span>종합점수</span><strong id="finalScore">0.00</strong></div>
+                  <div><span>위험도</span><strong id="riskScore">0.00</strong></div>
+                </div>
+              </article>
+
+              <article class="card model-breakdown-card">
+                <div class="card-header compact"><h2>모델별 판단</h2></div>
+                <div id="modelBreakdown" class="model-breakdown"></div>
+              </article>
+            </div>
+          </div>
+
+          <div class="metric-grid five" id="backtestMetrics">
+            <article class="metric-card"><div class="metric-label">총수익률</div><div class="metric-value" data-metric="totalReturn">-</div><div class="metric-foot">백테스트 최종 수익</div></article>
+            <article class="metric-card"><div class="metric-label">MDD</div><div class="metric-value" data-metric="mdd">-</div><div class="metric-foot">최대 낙폭</div></article>
+            <article class="metric-card"><div class="metric-label">승률</div><div class="metric-value" data-metric="winRate">-</div><div class="metric-foot">완료 거래 기준</div></article>
+            <article class="metric-card"><div class="metric-label">거래 횟수</div><div class="metric-value" data-metric="trades">-</div><div class="metric-foot">매수·매도 완료</div></article>
+            <article class="metric-card"><div class="metric-label">방향 적중률</div><div class="metric-value" data-metric="accuracy">-</div><div class="metric-foot">예측 방향 일치</div></article>
+          </div>
+
+          <article class="card" id="tradeHistoryCard" hidden>
+            <div class="card-header"><div><h2>백테스트 거래 기록</h2><p>예측 기준을 충족한 거래만 표시합니다.</p></div></div>
+            <div id="tradeHistory" class="table-wrap"></div>
+          </article>
+        </section>
+
+        <section id="scannerView" class="view">
+          <div class="page-heading-row scanner-heading">
+            <div>
+              <p class="eyebrow">MARKET EXPLORER</p>
+              <div class="inline-title-row"><h1>주식 스캐너</h1><span>여러 종목을 한 번에 분석해 매수 후보를 찾는 기능입니다.</span></div>
+              <p class="page-description">같은 조건으로 종목을 비교하고 신호가 강한 순서로 정렬합니다.</p>
+            </div>
+          </div>
+
+          <article class="card scanner-control-card">
+            <div class="scanner-control-grid">
+              <div>
+                <label class="field-label" for="scannerUniverse">스캔 범위</label>
+                <select id="scannerUniverse" class="field-control">
+                  <option value="popular">미국·한국 주요 종목</option>
+                  <option value="us">미국 기술주</option>
+                  <option value="kr">한국 주요 종목</option>
+                </select>
+              </div>
+              <div>
+                <label class="field-label" for="scannerLimit">분석 종목 수</label>
+                <select id="scannerLimit" class="field-control">
+                  <option>6</option><option selected>10</option><option>14</option>
+                </select>
+              </div>
+              <button id="runScannerBtn" class="primary-button scanner-run-button">스캔 실행</button>
+            </div>
+            <div id="scannerProgress" class="progress-panel" hidden>
+              <div class="progress-line"><span id="scannerProgressLabel">준비 중</span><strong id="scannerProgressPercent">0%</strong></div>
+              <div class="progress-track"><div id="scannerProgressBar" class="progress-bar"></div></div>
+            </div>
+          </article>
+
+          <div class="scanner-summary-grid">
+            <article class="metric-card"><div class="metric-label">분석 완료</div><div class="metric-value" id="scannedCount">0</div><div class="metric-foot">종목</div></article>
+            <article class="metric-card accent-green"><div class="metric-label">매수 후보</div><div class="metric-value positive" id="buyCandidateCount">0</div><div class="metric-foot">기준 충족</div></article>
+            <article class="metric-card"><div class="metric-label">최고 종합점수</div><div class="metric-value" id="bestScannerScore">-</div><div class="metric-foot" id="bestScannerTicker">-</div></article>
+          </div>
+
+          <article class="card scanner-results-card">
+            <div class="card-header">
+              <div><h2>스캔 결과</h2><p>한 번 실행하면 결과가 즉시 아래 표에 반영됩니다.</p></div>
+              <button id="exportScannerBtn" class="secondary-button small">CSV 저장</button>
+            </div>
+            <div id="scannerResults" class="table-wrap empty-state">
+              <div class="empty-icon">◎</div>
+              <strong>아직 스캔 결과가 없습니다.</strong>
+              <span>스캔 실행 버튼을 누르세요.</span>
+            </div>
+          </article>
+        </section>
+      </div>
+    </main>
+  </div>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+</body>
+</html>
